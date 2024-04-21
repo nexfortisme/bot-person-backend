@@ -20,15 +20,6 @@ export default function authenticateToken(
   if (token == null) return res.sendStatus(401);
 
   jwt.verify(token, process.env.JWT_SECRET ?? "", (err, user) => {
-    let myErr = { name: "TokenExpiredError" };
-
-    if (myErr && myErr.name == "TokenExpiredError") {
-      let decodedToken = jwt.decode(token, { complete: true });
-      let refreshToken = decodedToken?.payload.refreshToken;
-
-      console.log("refreshToken", refreshToken);
-    }
-
     if (err) return res.sendStatus(403);
     req.user = user;
     next();
