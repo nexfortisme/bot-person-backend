@@ -1,4 +1,3 @@
-import type { Request, Response } from "express";
 import type { Context } from "hono";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 
@@ -56,7 +55,7 @@ export async function AuthCallback(c: Context) {
 
     let respData = await resp.json();
     if (resp.ok) {
-      console.log('respData', respData)
+
       let authObject = {
         user: respData,
         discord_token: token,
@@ -102,42 +101,4 @@ export async function Logout(c: Context) {
     });
 }
 
-export async function RefreshToken(c: Context) {
-  const authHeader = c.req.header.arguments("authorization");
-  let refreshToken = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
-
-  jwt.verify(
-    refreshToken ?? "",
-    process.env.REFRESH_SECRET || "",
-    (err: any) => {
-
-      if (err) {
-        c.json({ error: "Invalid refresh token" }, 403);
-        return;
-      }
-
-      let decodedToken = jwt.decode(refreshToken ?? "", { complete: true });
-
-      let decodedUser = (decodedToken?.payload as JwtPayload)?.user;
-      let discordToken = (decodedToken?.payload as JwtPayload)?.discord_token;
-      let discordRefreshToken = (decodedToken?.payload as JwtPayload)?.discord_refresh_token;
-
-      let authObject = {
-        user: decodedUser,
-        discord_token: discordToken,
-        discord_refresh_token: discordRefreshToken,
-      };
-
-      let newToken = jwt.sign(authObject, process.env.JWT_SECRET || "", {
-        expiresIn: "1hr",
-      });
-      let newRefreshToken = jwt.sign(authObject, process.env.REFRESH_SECRET || "", {
-        expiresIn: "7d",
-      });
-
-      return c.json({ token: newToken, refreshToken: newRefreshToken });
-    },
-  );
-}
-
-export default { Login, Logout, AuthCallback, RefreshToken };
+export default { Login, Logout, AuthCallback };

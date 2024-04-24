@@ -1,8 +1,10 @@
 import { Hono } from "hono";
-import { AuthCallback, Login, RefreshToken } from "./services/auth/login";
+import { AuthCallback, Login } from "./services/auth/login";
 
 import { jwt } from "hono/jwt";
 import { cors } from "hono/cors";
+import GetDBConnection from "./services/database/db";
+import RefreshToken from "./services/auth/refresh-token";
 
 let PORT = Bun.env.PORT || 3000;
 let BASE_ROUTE = Bun.env.BASE_ROUTE;
@@ -28,6 +30,12 @@ app.get(`/test`, jwt({ secret: Bun.env.JWT_SECRET ?? '' }), (c) => c.text("Hello
 app.notFound((c) => {
   return c.text(`Not Found: ${c.req.url}`);
 });
+
+// GetDBConnection().then((db) => {
+//   if (db) {
+//     console.log('got db')
+//   }
+// });
 
 console.log("Server listening on http://localhost:" + PORT);
 

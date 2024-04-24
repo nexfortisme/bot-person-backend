@@ -1,19 +1,45 @@
-import jwt from 'jsonwebtoken';
-import type { Request, Response } from "express";
+import type { Context } from "hono";
+import jwt, { type JwtPayload } from 'jsonwebtoken';
 
-export default function refreshToken(req: Request, res: Response) {
+async function RefreshToken(c: Context) {
+    const authHeader = c.req.header.arguments("authorization");
+    let refreshToken = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
-    const authHeader = req.headers['authorization'];
-    let token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    try {
+        jwt.verify(
+            refreshToken ?? "",
+            process.env.REFRESH_SECRET || "",
+            (err: any) => {
 
-    if (token == null) return res.sendStatus(401);
+                if (err) {
+                    return c.json({ error: "Invalid refresh token" }, 403);
+                }
 
-    jwt.verify(token, process.env.JWT_SECRET ?? '', (err, auth_object) => {
-        console.log('auth_object', auth_object);
-        if (err) return res.sendStatus(403);
-        let newToken = jwt.sign(auth_object || {}, process.env.JWT_SECRET || '', {
-            expiresIn: "1hr",
-        });
-        res.send({ token: newToken });
-    })
+                let decodedToken = jwt.decode(refreshToken ?? "", { complete: true });
+
+                let decodedUser = (decodedToken?.payload as JwtPayload)?.user;
+                let discordToken = (decodedToken?.payload as JwtPayload)?.discord_token;
+                let discordRefreshToken = (decodedToken?.payload as JwtPayload)?.discord_refresh_token;
+
+                let authObject = {
+                    user: decodedUser,
+                    discord_token: discordToken, // Don't really need to worry about discord token because the ttl is 7 days
+                    discord_refresh_token: discordRefreshToken,
+                };
+
+                let newToken = jwt.sign(authObject, process.env.JWT_SECRET || "", {
+                    expiresIn: "1hr",
+                });
+                let newRefreshToken = jwt.sign(authObject, process.env.REFRESH_SECRET || "", {
+                    expiresIn: "7d",
+                });
+
+                return c.json({ token: newToken, refreshToken: newRefreshToken });
+            },
+        );
+    } catch (error) {
+        return c.json({ error: "Error token verification" }, 400);
+    }
 }
+
+export default RefreshToken;
