@@ -1,34 +1,37 @@
-import "dotenv/config";
-import express from "express";
-import { Login, AuthCallback, RefreshToken } from "./services/auth/login";
-import authenticateToken from "./middlewear/auth-middlewear";
-import bodyParser from "body-parser";
-import cors from "cors";
+import { Hono } from "hono";
+import { AuthCallback, Login, RefreshToken } from "./services/auth/login";
 
-require("dotenv").config();
+import { jwt } from "hono/jwt";
+import { cors } from "hono/cors";
 
-let app = express();
-let PORT = process.env.PORT || 3000;
-let BASE_ROUTE = process.env.BASE_ROUTE || "/api/v1";
-let OAUTH_URL = process.env.OAUTH_URL || "";
+let PORT = Bun.env.PORT || 3000;
+let BASE_ROUTE = Bun.env.BASE_ROUTE;
+let OAUTH_URL = Bun.env.OAUTH_URL || "";
 
-const corsOptions = { origin: "http://localhost:5173", credentials: true };
+let app = new Hono().basePath(BASE_ROUTE ?? "/api/v1");
 
-app.use(bodyParser.json());
-app.use(cors(corsOptions));
+app.use('*', async (c, next) => {
+  await cors({
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    allowMethods: ['GET', 'OPTIONS', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  })(c, await next)
+})
 
-app.get(BASE_ROUTE + "/auth/discord", (req, res) => {
-  res.redirect(OAUTH_URL);
+app.get(`/auth/discord`, (c) => c.redirect(OAUTH_URL));
+app.get(`/auth/discord/callback`, Login);
+app.get(`/auth/callback`, AuthCallback);
+app.get(`/auth/refresh`, RefreshToken);
+
+app.get(`/test`, jwt({ secret: Bun.env.JWT_SECRET ?? '' }), (c) => c.text("Hello World"));
+
+app.notFound((c) => {
+  return c.text(`Not Found: ${c.req.url}`);
 });
-app.get(BASE_ROUTE + "/auth/discord/callback", Login);
-app.get(BASE_ROUTE + "/auth/callback", AuthCallback);
 
-app.get(BASE_ROUTE + "/auth/refresh", RefreshToken);
+console.log("Server listening on http://localhost:" + PORT);
 
-app.get(BASE_ROUTE + "/test", authenticateToken, (req, res) => {
-  res.send("Hello World");
-});
-
-app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-});
+export default {
+  port: PORT,
+  fetch: app.fetch,
+};

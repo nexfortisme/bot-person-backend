@@ -1,14 +1,19 @@
 import type { Request, Response } from "express";
+import type { Context } from "hono";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 
-let CLIENT_ID = process.env.CLIENT_ID;
-let CLIENT_SECRET = process.env.CLIENT_SECRET;
-let REDIRECT_URI = process.env.REDIRECT_URI;
+let CLIENT_ID = Bun.env.CLIENT_ID;
+let CLIENT_SECRET = Bun.env.CLIENT_SECRET;
+let REDIRECT_URI = Bun.env.REDIRECT_URI;
 
-let BASE_ROUTE = process.env.BASE_ROUTE;
+let JWT_SECRET = Bun.env.JWT_SECRET ?? '';
+let REFRESH_SECRET = Bun.env.REFRESH_SECRET ?? '';
 
-export function Login(request: Request, response: Response) {
-  let code = request.query["code"];
+let BASE_ROUTE = Bun.env.BASE_ROUTE;
+
+export async function Login(c: Context) {
+
+  let code = c.req.query("code");
 
   let params = new URLSearchParams();
   params.append("client_id", CLIENT_ID ?? "");
@@ -17,60 +22,69 @@ export function Login(request: Request, response: Response) {
   params.append("code", code?.toString() || "");
   params.append("redirect_uri", REDIRECT_URI ?? "");
 
-  fetch(`https://discord.com/api/oauth2/token`, {
-    method: "POST",
-    body: params,
-  })
-    .then((res) => res.json())
-    .then((json) => {
-      // token = json.access_token;
-      response.redirect(
-        BASE_ROUTE +
-        "/auth/callback?token=" +
-        json.access_token +
-        "&refresh_token=" +
-        json.refresh_token,
-      );
+  try {
+    let response = await fetch(`https://discord.com/api/oauth2/token`, {
+      method: "POST",
+      body: params,
     });
+
+    let responseJson = await response.json();
+    if (response.ok) {
+      return c.redirect(`${BASE_ROUTE}/auth/callback?token=${responseJson.access_token}&refresh_token=${responseJson.refresh_token}`);
+    } else {
+      return c.text('Error in discord response')
+    }
+  } catch (error) {
+    return c.text('Error in auth callback')
+  }
 }
 
-export async function AuthCallback(request: Request, response: Response) {
-  let token = request.query["token"];
-  let refreshToken = request.query["refresh_token"];
+export async function AuthCallback(c: Context) {
+
+  let token = c.req.query("token");
+  let refreshToken = c.req.query("refresh_token");
 
   let jwtToken;
   let jwtRefreshToken;
 
-  let resp = await fetch("https://discord.com/api/users/@me", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-    .then((response) => response.json())
-    .then((user) => {
+  try {
+    let resp = await fetch("https://discord.com/api/users/@me", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    let respData = await resp.json();
+    if (resp.ok) {
+      console.log('respData', respData)
       let authObject = {
-        user: user,
+        user: respData,
         discord_token: token,
         discord_refresh_token: refreshToken,
       };
 
-      jwtToken = jwt.sign(authObject, process.env.JWT_SECRET || "", {
+      jwtToken = jwt.sign(authObject, JWT_SECRET, {
         expiresIn: "1hr",
       });
-      jwtRefreshToken = jwt.sign(authObject, process.env.REFRESH_SECRET || "", {
+      jwtRefreshToken = jwt.sign(authObject, REFRESH_SECRET, {
         expiresIn: "7d",
       });
-    })
-    .catch((error) => console.error(error));
 
-  response.redirect(
-    `${process.env.AUTH_REDIRECT_BASE_URL}?token=${jwtToken ? encodeURIComponent(jwtToken) : ""}&refreshToken=${jwtRefreshToken ? encodeURIComponent(jwtRefreshToken) : ""}`,
-  );
+      return c.redirect(
+        `${Bun.env.AUTH_REDIRECT_BASE_URL}?token=${jwtToken ? encodeURIComponent(jwtToken) : ""}&refreshToken=${jwtRefreshToken ? encodeURIComponent(jwtRefreshToken) : ""}`,
+      );
+    } else {
+      return c.json({ error: "Error in discord response" }, 400);
+    }
+  } catch (error) {
+    return c.json({ error: "Error in auth callback" }, 400);
+  }
+
 }
 
-export async function Logout(req: Request, res: Response) {
+export async function Logout(c: Context) {
 
-  const authHeader = req.headers["authorization"];
+  const authHeader = c.req.header.arguments("authorization");
   let token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
   let params = new URLSearchParams();
@@ -88,17 +102,17 @@ export async function Logout(req: Request, res: Response) {
     });
 }
 
-export function RefreshToken(request: Request, response: Response) {
-  const authHeader = request.headers["authorization"];
+export async function RefreshToken(c: Context) {
+  const authHeader = c.req.header.arguments("authorization");
   let refreshToken = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
   jwt.verify(
     refreshToken ?? "",
     process.env.REFRESH_SECRET || "",
-    (err, user) => {
+    (err: any) => {
 
       if (err) {
-        response.sendStatus(403);
+        c.json({ error: "Invalid refresh token" }, 403);
         return;
       }
 
@@ -121,7 +135,7 @@ export function RefreshToken(request: Request, response: Response) {
         expiresIn: "7d",
       });
 
-      response.json({ token: newToken, refreshToken: newRefreshToken });
+      return c.json({ token: newToken, refreshToken: newRefreshToken });
     },
   );
 }
