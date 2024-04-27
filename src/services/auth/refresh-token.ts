@@ -1,45 +1,52 @@
 import type { Context } from "hono";
-import jwt, { type JwtPayload } from 'jsonwebtoken';
+import jwt, { type JwtPayload } from "jsonwebtoken";
 
 async function RefreshToken(c: Context) {
-    const authHeader = c.req.header.arguments("authorization");
-    let refreshToken = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
-    try {
-        jwt.verify(
-            refreshToken ?? "",
-            process.env.REFRESH_SECRET || "",
-            (err: any) => {
+  console.log("Refresh Token", c.req.header("Authorization"));
 
-                if (err) {
-                    return c.json({ error: "Invalid refresh token" }, 403);
-                }
+  const authHeader = c.req.header("Authorization");
+  let refreshToken = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
-                let decodedToken = jwt.decode(refreshToken ?? "", { complete: true });
+  try {
+    jwt.verify(
+      refreshToken ?? "",
+      process.env.REFRESH_SECRET || "",
+      (err: any) => {
+        if (err) {
+          return c.json({ error: "Invalid refresh token" }, 403);
+        }
 
-                let decodedUser = (decodedToken?.payload as JwtPayload)?.user;
-                let discordToken = (decodedToken?.payload as JwtPayload)?.discord_token;
-                let discordRefreshToken = (decodedToken?.payload as JwtPayload)?.discord_refresh_token;
+        let decodedToken = jwt.decode(refreshToken ?? "", { complete: true });
 
-                let authObject = {
-                    user: decodedUser,
-                    discord_token: discordToken, // Don't really need to worry about discord token because the ttl is 7 days
-                    discord_refresh_token: discordRefreshToken,
-                };
+        let decodedUser = (decodedToken?.payload as JwtPayload)?.user;
+        let discordToken = (decodedToken?.payload as JwtPayload)?.discord_token;
+        let discordRefreshToken = (decodedToken?.payload as JwtPayload)
+          ?.discord_refresh_token;
 
-                let newToken = jwt.sign(authObject, process.env.JWT_SECRET || "", {
-                    expiresIn: "1hr",
-                });
-                let newRefreshToken = jwt.sign(authObject, process.env.REFRESH_SECRET || "", {
-                    expiresIn: "7d",
-                });
+        let authObject = {
+          user: decodedUser,
+          discord_token: discordToken, // Don't really need to worry about discord token because the ttl is 7 days
+          discord_refresh_token: discordRefreshToken,
+        };
 
-                return c.json({ token: newToken, refreshToken: newRefreshToken });
-            },
+        let newToken = jwt.sign(authObject, process.env.JWT_SECRET || "", {
+          expiresIn: "1hr",
+        });
+        let newRefreshToken = jwt.sign(
+          authObject,
+          process.env.REFRESH_SECRET || "",
+          {
+            expiresIn: "7d",
+          },
         );
-    } catch (error) {
-        return c.json({ error: "Error token verification" }, 400);
-    }
+
+        return c.json({ token: newToken, refreshToken: newRefreshToken });
+      },
+    );
+  } catch (error) {
+    return c.json({ error: "Error token verification" }, 400);
+  }
 }
 
 export default RefreshToken;
