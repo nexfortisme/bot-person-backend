@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import GetDBConnection from "../database/db";
 import { Jwt } from "hono/utils/jwt";
 
-export default async function GetUserInfo(c: Context) {
+export default async function GetUserActivity(c: Context) {
 
     let auth = c.req.header()['authorization'];
     auth = auth.replace('Bearer ', '');
@@ -16,7 +16,7 @@ export default async function GetUserInfo(c: Context) {
         return c.json({ error: "No user id provided" }, 400);
     }
 
-    let resp = await dbConnection.query('SELECT * FROM users WHERE UserId = $userId',
+    let resp = await dbConnection.query('SELECT * FROM events WHERE eventUser = $userId',
     {
         userId: userId,
     });
@@ -24,6 +24,8 @@ export default async function GetUserInfo(c: Context) {
     if (resp.error) {
         return c.json({ error: "Error in query" }, 400);
     }
-    
-    return c.json(resp[0][0], 200);
+
+    console.log('resp', resp)
+
+    return c.json(resp[0], 200);
 }

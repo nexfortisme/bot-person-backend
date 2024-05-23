@@ -3,9 +3,9 @@ import jwt, { type JwtPayload } from "jsonwebtoken";
 
 async function RefreshToken(c: Context) {
 
-  console.log("Refresh Token", c.req.header("Authorization"));
+  console.log('refresh token', c.req.header("Refresh"));
 
-  const authHeader = c.req.header("Authorization");
+  const authHeader = c.req.header("Refresh");
   let refreshToken = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
   try {
@@ -41,6 +41,7 @@ async function RefreshToken(c: Context) {
           },
         );
 
+        // return c.json({ token: newToken, refreshToken: newRefreshToken });
         return c.json({ token: newToken, refreshToken: newRefreshToken });
       },
     );
